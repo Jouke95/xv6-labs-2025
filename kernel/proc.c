@@ -272,6 +272,8 @@ kfork(void)
     return -1;
   }
   np->sz = p->sz;
+  np->sandbox = p->sandbox;
+  safestrcpy(np->path, p->path, MAXPATH);
 
   // copy saved user registers.
   *(np->trapframe) = *(p->trapframe);

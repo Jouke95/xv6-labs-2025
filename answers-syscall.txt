@@ -1,0 +1,12 @@
+The usertrap() function from kernel/trap.c:68
+
+The value in a7 is 0xf, so 15 in decimal.. which means the first syscall to be called is open()
+
+The previous mode was the user mode, because thats where the syscall came from
+
+The assembly instruction is: lw s2,0(zero).
+the variable num is put in register s2.
+
+The kernel crashes because its asking for memory address 0x0, but thats not an mapped/valid memory address.
+
+The process was called "init", and the process id was 1.

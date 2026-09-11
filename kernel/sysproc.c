@@ -105,3 +105,21 @@ sys_uptime(void)
   release(&tickslock);
   return xticks;
 }
+
+uint64
+sys_freemem(void)
+{
+  return (uint64)freemem();
+}
+
+uint64
+sys_interpose(void)
+{
+  int mask;
+  argint(0, &mask);
+  char path[MAXPATH];
+  argstr(1, path, MAXPATH);
+  myproc()->sandbox = mask;
+  safestrcpy(myproc()->path, path, MAXPATH);
+  return(0);
+}
