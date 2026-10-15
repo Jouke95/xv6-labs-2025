@@ -23,11 +23,20 @@ struct {
   struct run *freelist;
 } kmem;
 
+struct {
+  struct spinlock lock;
+  struct run *superfreelist;
+  int superfreed[NSUPERPG];
+} superkmem;
+
 void
 kinit()
 {
   initlock(&kmem.lock, "kmem");
-  freerange(end, (void*)PHYSTOP);
+  initlock(&superkmem.lock, "superkmem");
+  freerange(end, (void*)(SUPERBASE));
+  for (int i = 0; i < NSUPERPG; i++)
+    superfree((void*)(SUPERBASE + (SUPERPGSIZE * i)));
 }
 
 void
@@ -46,9 +55,24 @@ freerange(void *pa_start, void *pa_end)
 void
 kfree(void *pa)
 {
+  if ((uint64)pa >= SUPERBASE && (uint64)pa < PHYSTOP) {
+    int full = 0;
+    int n = ((uint64)pa - SUPERBASE) / SUPERPGSIZE;
+    acquire(&superkmem.lock);
+    superkmem.superfreed[n]++;
+    if (superkmem.superfreed[n] == 512) {
+      full = 1;
+      superkmem.superfreed[n] = 0;
+    }
+    release(&superkmem.lock);
+    if (full)
+      superfree((void*)SUPERBASE + n * SUPERPGSIZE);
+    return;
+  }
+
   struct run *r;
 
-  if(((uint64)pa % PGSIZE) != 0 || (char*)pa < end || (uint64)pa >= PHYSTOP)
+  if(((uint64)pa % PGSIZE) != 0 || (char*)pa < end || (uint64)pa >= SUPERBASE)
     panic("kfree");
 
   // Fill with junk to catch dangling refs.
@@ -60,6 +84,26 @@ kfree(void *pa)
   r->next = kmem.freelist;
   kmem.freelist = r;
   release(&kmem.lock);
+}
+
+void
+superfree(void *pa)
+{
+  if (((uint64)pa % SUPERPGSIZE) != 0)
+    panic("superfree");
+  if ((uint64)pa < SUPERBASE || (uint64)pa >= PHYSTOP)
+    panic("superfree");
+
+  struct run *r;
+
+  r = (struct run*)pa;
+
+  memset(pa, 0, SUPERPGSIZE);
+
+  acquire(&superkmem.lock);
+  r->next = superkmem.superfreelist;
+  superkmem.superfreelist = r;
+  release(&superkmem.lock);
 }
 
 // Allocate one 4096-byte page of physical memory.
@@ -78,5 +122,21 @@ kalloc(void)
 
   if(r)
     memset((char*)r, 5, PGSIZE); // fill with junk
+  return (void*)r;
+}
+
+void* superalloc(void)
+{
+  struct run *r;
+
+  acquire(&superkmem.lock);
+  r = superkmem.superfreelist;
+  if(r) {
+    superkmem.superfreelist = r->next;
+    r->next = 0;
+  }
+
+  release(&superkmem.lock);
+
   return (void*)r;
 }

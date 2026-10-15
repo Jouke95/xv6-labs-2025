@@ -43,6 +43,11 @@
 #define KERNBASE 0x80000000L
 #define PHYSTOP (KERNBASE + 128*1024*1024)
 
+// defines for the superpages
+#define NSUPERPG    30
+
+#define SUPERBASE (PHYSTOP - (NSUPERPG * SUPERPGSIZE))
+
 // map the trampoline page to the highest address,
 // in both user and kernel space.
 #define TRAMPOLINE (MAXVA - PGSIZE)
